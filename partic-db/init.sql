@@ -7,7 +7,8 @@ CREATE TABLE parkingtickets (
   entryTime DATETIME NOT NULL,
   exitTime DATETIME NOT NULL,
   cost DECIMAL(10, 2) NOT NULL,
-  paid BOOLEAN NOT NULL
+  balance DECIMAL(10, 2) NOT NULL
+  paymentStatus BOOLEAN NOT NULL
 );
 
 -- Create a table for user accounts

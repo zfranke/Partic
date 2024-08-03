@@ -42,7 +42,7 @@ function Entry() {
             {success && <Alert severity="success">
                 Your parking ticket is: {parkingTicket.ticketNumber}
                 Your entry time is: {parkingTicket.entryTime}
-                Hourly fee is $5.00, 1 hour minimum
+                Hourly fee is ${process.env.hourly_rate}, 1 hour minimum
             </Alert>}
         </Container>
     );
