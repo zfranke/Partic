@@ -4,11 +4,12 @@ USE partic;
 CREATE TABLE parkingtickets (
   id INT AUTO_INCREMENT PRIMARY KEY,
   ticketNumber VARCHAR(50) NOT NULL,
-  entryTime DATETIME NOT NULL,
-  exitTime DATETIME NOT NULL,
-  cost DECIMAL(10, 2) NOT NULL,
-  balance DECIMAL(10, 2) NOT NULL
-  paymentStatus BOOLEAN NOT NULL
+  entryTime VARCHAR(250) NOT NULL,
+  exitTime VARCHAR(250),
+  cost DECIMAL(10, 2),
+  balance DECIMAL(10, 2),
+  paymentStatus BOOLEAN,
+  isExited BOOLEAN
 );
 
 -- Create a table for user accounts

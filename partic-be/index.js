@@ -175,8 +175,11 @@ app.get('/api/get-parkingTicket', (req, res) => {
   const ticketNumber = Math.floor(Math.random() * 1000000);
   const entryTime = new Date().toLocaleString();
 
+  console.log("Ticket Number: " + ticketNumber);
+  console.log("Entry Time: " + entryTime);
+
   // Insert the ticket into the database
-  const sql = 'INSERT INTO parkingtickets (ticket_number, entry_time) VALUES (?, ?)';
+  const sql = 'INSERT INTO parkingtickets (ticketNumber, entryTime) VALUES (?, ?)';
   pool.query(sql, [ticketNumber, entryTime], (err, result) => {
     if (err) {
       console.error('Error inserting parking ticket:', err);
@@ -192,43 +195,96 @@ app.get('/api/get-parkingTicket', (req, res) => {
 // API Endpoint to Exit a Parking Ticket and calculate the cost
 app.post('/api/exit-parkingTicket', (req, res) => {
   const { ticketNumber } = req.body;
-  const exitTime = new Date().toLocaleString();
+  const exitTime = new Date();
 
   // Retrieve the ticket from the database
-  const sql = 'SELECT * FROM parkingtickets WHERE ticket_number = ?';
+  const sql = 'SELECT * FROM parkingtickets WHERE ticketNumber = ?';
   pool.query(sql, [ticketNumber], (err, results) => {
     if (err) {
       console.error('Error retrieving parking ticket:', err);
-      res.status(500).json({ error: 'Error retrieving parking ticket' });
-      return;
+      return res.status(500).json({ error: 'Error retrieving parking ticket' });
     }
 
-    // Calculate the cost based on entry time and exit time
-    // At minimum, the cost is 1 hour
-    const entryTime = new Date(results[0].entry_time);
-    const diff = new Date(exitTime) - entryTime;
-    const hours = Math.ceil(diff / (1000 * 60 * 60));
-    const cost = hours * process.env.HOURLY_RATE;
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Parking ticket not found' });
+    }
 
-    res.status(200).json({ ticketNumber, entryTime, exitTime, cost });
+    const ticket = results[0];
+
+    if (ticket.isExited) {
+      // If the ticket has already exited, return the existing data
+      return res.status(200).json({
+        ticketNumber: ticket.ticketNumber,
+        entryTime: ticket.entryTime,
+        exitTime: ticket.exitTime,
+        cost: ticket.cost,
+        paymentStatus: ticket.paymentStatus,
+        isExited: ticket.isExited,
+      });
+    }
+
+    const entryTime = new Date(ticket.entryTime);
+
+    // Calculate the cost based on entry time and exit time
+    const diff = exitTime - entryTime;
+    const hours = Math.ceil(diff / (1000 * 60 * 60)); // Ensure at least 1 hour is charged
+    const cost = hours * parseFloat(process.env.REACT_APP_HOURLY_RATE);
+
+    // Update the ticket with the exit time, cost, and set isExited to true
+    const updateSql = 'UPDATE parkingtickets SET exitTime = ?, cost = ?, paymentStatus = ?, isExited = ? WHERE ticketNumber = ?';
+    pool.query(updateSql, [exitTime.toISOString(), cost, false, true, ticketNumber], (updateErr) => {
+      if (updateErr) {
+        console.error('Error updating parking ticket:', updateErr);
+        return res.status(500).json({ error: 'Error updating parking ticket' });
+      }
+
+      res.status(200).json({
+        ticketNumber,
+        entryTime: ticket.entryTime,
+        exitTime: exitTime.toISOString(),
+        cost,
+        paymentStatus: false,
+        isExited: true,
+      });
+    });
   });
 });
 
 // API Endpoint to Pay for a Parking Ticket
 app.post('/api/pay-parkingTicket', (req, res) => {
-  const { ticketNumber, cost } = req.body;
+  const { amount, ticketNumber } = req.body;
 
-  // Update the ticket in the database with exit time and cost, if the cost is greater than 0 then inform the user,
-  // otherwise, set the value paid to true
-  const sql = 'UPDATE parkingtickets SET exit_time = ?, cost = ?, paid = ? WHERE ticket_number = ?';
-  pool.query(sql, [new Date().toLocaleString(), cost, cost > 0, ticketNumber], (err, result) => {
+  // Retrieve the ticket from the database
+  const sql = 'SELECT * FROM parkingtickets WHERE ticketNumber = ?';
+  pool.query(sql, [ticketNumber], (err, results) => {
     if (err) {
-      console.error('Error updating parking ticket:', err);
-      res.status(500).json({ error: 'Error updating parking ticket' });
-    } else {
-      console.log('Parking ticket updated:', result);
-      res.status(200).json({ message: 'Parking ticket updated successfully' });
+      console.error('Error retrieving parking ticket:', err);
+      return res.status(500).json({ error: 'Error retrieving parking ticket' });
     }
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Parking ticket not found' });
+    }
+
+    const ticket = results[0];
+
+    // Calculate the new balance
+    let newBalance = ticket.cost - amount;
+
+    if (newBalance < 0) {
+      newBalance = 0;
+    }
+
+    // Update the ticket with the new balance and payment status
+    const updateSql = 'UPDATE parkingtickets SET balance = ?, paymentStatus = ? WHERE ticketNumber = ?';
+    pool.query(updateSql, [newBalance, newBalance === 0, ticketNumber], (updateErr, updateResult) => {
+      if (updateErr) {
+        console.error('Error updating parking ticket:', updateErr);
+        return res.status(500).json({ error: 'Error updating parking ticket' });
+      }
+
+      res.status(200).json({ ticketNumber, balance: newBalance });
+    });
   });
 });
 

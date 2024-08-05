@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Container, TextField, Button, Alert } from '@mui/material';
+import { Container, Card, CardHeader, CardContent,TextField, Button, Alert } from '@mui/material';
 import Navigation from './Navigation';
 
 
@@ -8,7 +8,7 @@ import Navigation from './Navigation';
 */
 function Exit() {
     const [parkingTicket, setParkingTicket] = useState('');
-    const [cost, setCost] = useState('');
+    const [costInput, setCostInput] = useState('');
     const [success, setSuccess] = useState(false);
     const [pay, setPay] = useState(false);
     const {paySuccess, setPaySuccess} = useState(false);
@@ -19,21 +19,21 @@ function Exit() {
 
     // Get the ticket number from the user and calculate the cost based on entry time and exit time which is when the ticket is sent
     try {
-      const response = await fetch(`${process.env.backend_url}/api/exit-parkingTicket`, {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/exit-parkingTicket`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          parkingTicket: parkingTicket,
+          ticketNumber: parkingTicket,
         }),
         })
 
         if (response.ok) {
         // Parking ticket exited successfully
-        setParkingTicket('');
+        const parkingTicket = await response.json();
+        setParkingTicket(parkingTicket);
         setSuccess(true);
-        setCost(parkingTicket.cost);
         setPay(true);
         }
         else {
@@ -53,21 +53,21 @@ function Exit() {
 
         // Get the ticket number and amount from the user and process the payment
         try {
-            const response = await fetch(`${process.env.backend_url}/api/pay-parkingTicket`, {
+            const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/pay-parkingTicket`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    parkingTicket: parkingTicket,
-                    cost: cost,
+                    ticketNumber: parkingTicket.ticketNumber,
+                    amount: costInput,
                 }),
             })
 
             if (response.ok) {
+                const parkingTicket = await response.json();
                 // Payment successful
-                setParkingTicket('');
-                setCost('');
+                setParkingTicket(parkingTicket);
                 setSuccess(true);
             } else {
                 // Handle error
@@ -79,11 +79,8 @@ function Exit() {
         }
     }
 
-
-
     return (
         <>
-        <Navigation />
             <Container>
                 <h1>Exit a Parking Ticket</h1>
                 <TextField
@@ -93,13 +90,59 @@ function Exit() {
                     onChange={(e) => setParkingTicket(e.target.value)}
                 />
                 <Button variant="contained" color="primary" onClick={handleExitTicket}>Exit Ticket</Button>
-                {success && <Alert severity="success">
-                    Your parking ticket is: {parkingTicket.ticketNumber}
-                    Your entry time is: {parkingTicket.entryTime}
-                    Your exit time is: {parkingTicket.exitTime}
-                    Your cost is: {parkingTicket.cost}
-                    Hourly fee is ${process.env.hourly_rate}, 1 hour minimum
-                </Alert>}
+                {success && 
+                <>
+                <Alert severity="success">
+                    Ticket Found
+                </Alert>
+
+                <Card>
+                    <CardHeader title="Parking Ticket Info" />
+                    <CardContent>
+                        <TextField
+                            label="Ticket Number"
+                            value={parkingTicket.ticketNumber}
+                            disabled
+                        />
+                        <br />
+                        <br />
+                        <TextField
+                            label="Entry Time"
+                            value={parkingTicket.entryTime}
+                            disabled
+                        />
+                        <br />
+                        <br />
+                        <TextField
+                            label="Exit Time"
+                            value={parkingTicket.exitTime}
+                            disabled
+                        />
+                        <br />
+                        <br />
+                        <TextField
+                            label="Cost"
+                            value={parkingTicket.cost}
+                            disabled
+                        />
+                        <br />
+                        <br />
+                        <TextField
+                            label="Hourly Rate"
+                            value={process.env.REACT_APP_HOURLY_RATE}
+                            disabled
+                        />
+                        <br />
+                        <br />
+                        <TextField
+                            label="Minimum Hours"
+                            value="1"
+                            disabled
+                        />
+                    </CardContent>
+                </Card>
+                </>
+                }
             </Container>
 
             {pay && <Container>
@@ -113,8 +156,8 @@ function Exit() {
                 <TextField
                     label="Amount"
                     variant="outlined"
-                    value={cost}
-                    onChange={(e) => setCost(e.target.value)}
+                    value={costInput}
+                    onChange={(e) => setCostInput(e.target.value)}
                 />
                 <Button variant="contained" color="primary" onClick={handlePayTicket}>Pay Ticket</Button>
                 {paySuccess && <Alert severity="success">

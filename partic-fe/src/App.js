@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate, Link } from 'react-router-dom';
-import FormView from './components/FormView';
 import AdminView from './components/AdminView';
 import Login from './components/Login';
 import Register from './components/Register';
+import Entry from './components/Entry.js';
+import Exit from './components/Exit.js';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -56,7 +57,7 @@ function App() {
             ) : null
           }
         />
-        <Route path="/" element={<FormView />} />
+        <Route path="/" element={<><Entry /> <Exit /></>} />
       </Routes>
     </Router>
   );
