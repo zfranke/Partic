@@ -8,8 +8,7 @@ CREATE TABLE parkingtickets (
   exitTime VARCHAR(250),
   cost DECIMAL(10, 2),
   balance DECIMAL(10, 2),
-  paymentStatus BOOLEAN,
-  isExited BOOLEAN
+  paymentStatus BOOLEAN
 );
 
 -- Create a table for user accounts

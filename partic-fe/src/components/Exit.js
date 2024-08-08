@@ -1,57 +1,20 @@
 import React, { useState } from 'react';
-import { Container, Card, CardHeader, CardContent,TextField, Button, Alert } from '@mui/material';
-import Navigation from './Navigation';
-
+import { Container, Paper, Box, Typography, TextField, Button, Alert } from '@mui/material';
 
 /*
 * Exit component is responsible for exiting a parking ticket
 */
 function Exit() {
-    const [parkingTicket, setParkingTicket] = useState('');
+    const [ticketNumber, setTicketNumber] = useState('');
     const [costInput, setCostInput] = useState('');
     const [success, setSuccess] = useState(false);
-    const [pay, setPay] = useState(false);
-    const {paySuccess, setPaySuccess} = useState(false);
+    const [paySuccess, setPaySuccess] = useState(false);
+    const [parkingTicket, setParkingTicket] = useState(null);
 
-    //User clicks a big button and exits a parking ticket
-    const handleExitTicket = async(e) => {
+    // Pay for the ticket
+    const handlePayTicket = async (e) => {
         e.preventDefault();
 
-    // Get the ticket number from the user and calculate the cost based on entry time and exit time which is when the ticket is sent
-    try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/exit-parkingTicket`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ticketNumber: parkingTicket,
-        }),
-        })
-
-        if (response.ok) {
-        // Parking ticket exited successfully
-        const parkingTicket = await response.json();
-        setParkingTicket(parkingTicket);
-        setSuccess(true);
-        setPay(true);
-        }
-        else {
-        // Handle error
-        setSuccess(false);
-        }
-    }
-    catch (error) {
-        // Handle error
-        setSuccess(false);
-    }
-    }
-
-    //Pay for the ticket
-    const handlePayTicket = async(e) => {
-        e.preventDefault();
-
-        // Get the ticket number and amount from the user and process the payment
         try {
             const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/pay-parkingTicket`, {
                 method: 'POST',
@@ -60,111 +23,141 @@ function Exit() {
                 },
                 body: JSON.stringify({
                     ticketNumber: parkingTicket.ticketNumber,
-                    amount: costInput,
+                    amount: parseFloat(costInput),
                 }),
-            })
+            });
 
             if (response.ok) {
-                const parkingTicket = await response.json();
+                const updatedTicket = await response.json();
                 // Payment successful
-                setParkingTicket(parkingTicket);
+                setParkingTicket(updatedTicket);
+                setPaySuccess(true);
+                setSuccess(false);
+                setCostInput('');
+            } else {
+                // Handle error
+                setPaySuccess(false);
+            }
+        } catch (error) {
+            // Handle error
+            setPaySuccess(false);
+        }
+    }
+
+    // Search for the ticket
+    const handleSearchTicket = async (e) => {
+        e.preventDefault();
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/search-parkingTicket/${ticketNumber}`);
+            if (response.ok) {
+                const foundTicket = await response.json();
+                setParkingTicket(foundTicket);
                 setSuccess(true);
+                setPaySuccess(false);
             } else {
                 // Handle error
                 setSuccess(false);
+                setParkingTicket(null);
             }
         } catch (error) {
             // Handle error
             setSuccess(false);
+            setParkingTicket(null);
         }
     }
 
     return (
         <>
             <Container>
-                <h1>Exit a Parking Ticket</h1>
-                <TextField
-                    label="Ticket Number"
-                    variant="outlined"
-                    value={parkingTicket.ticketNumber}
-                    onChange={(e) => setParkingTicket(e.target.value)}
-                />
-                <Button variant="contained" color="primary" onClick={handleExitTicket}>Exit Ticket</Button>
-                {success && 
-                <>
-                <Alert severity="success">
-                    Ticket Found
-                </Alert>
+                <Typography variant="h4" gutterBottom>Search for a Parking Ticket</Typography>
+                <form onSubmit={handleSearchTicket}>
+                    <TextField
+                        label="Ticket Number"
+                        variant="outlined"
+                        value={ticketNumber}
+                        onChange={(e) => setTicketNumber(e.target.value)}
+                        fullWidth
+                        margin="normal"
+                    />
+                    <Button type="submit" variant="contained" color="primary">Search Ticket</Button>
+                </form>
+                {success && parkingTicket && (
+                    <>
+                        <Paper elevation={3} sx={{ mt: 3, p: 3 }}>
+                            <Typography variant="h6" gutterBottom>Parking Ticket Details</Typography>
+                            <Box display="flex" flexDirection="column" alignItems="center">
+                                <Box sx={{ mb: 2 }}>
+                                    <Typography variant="body1">Ticket Number:</Typography>
+                                    <Typography variant="h6">{parkingTicket.ticketNumber}</Typography>
+                                </Box>
+                                <Box sx={{ mb: 2 }}>
+                                    <Typography variant="body1">Entry Time:</Typography>
+                                    <Typography variant="h6">{parkingTicket.entryTime}</Typography>
+                                </Box>
+                                <Box sx={{ mb: 2 }}>
+                                    <Typography variant="body1">Exit Time:</Typography>
+                                    <Typography variant="h6">{parkingTicket.exitTime}</Typography>
+                                </Box>
+                                <Box sx={{ mb: 2 }}>
+                                    <Typography variant="body1">Cost:</Typography>
+                                    <Typography variant="h6">${parkingTicket.cost}</Typography>
+                                </Box>
+                                <Box sx={{ mb: 2 }}>
+                                    <Typography variant="body1">Balance:</Typography>
+                                    <Typography variant="h6">${parkingTicket.balance}</Typography>
+                                </Box>
+                            </Box>
+                        </Paper>
 
-                <Card>
-                    <CardHeader title="Parking Ticket Info" />
-                    <CardContent>
-                        <TextField
-                            label="Ticket Number"
-                            value={parkingTicket.ticketNumber}
-                            disabled
-                        />
-                        <br />
-                        <br />
-                        <TextField
-                            label="Entry Time"
-                            value={parkingTicket.entryTime}
-                            disabled
-                        />
-                        <br />
-                        <br />
-                        <TextField
-                            label="Exit Time"
-                            value={parkingTicket.exitTime}
-                            disabled
-                        />
-                        <br />
-                        <br />
-                        <TextField
-                            label="Cost"
-                            value={parkingTicket.cost}
-                            disabled
-                        />
-                        <br />
-                        <br />
-                        <TextField
-                            label="Hourly Rate"
-                            value={process.env.REACT_APP_HOURLY_RATE}
-                            disabled
-                        />
-                        <br />
-                        <br />
-                        <TextField
-                            label="Minimum Hours"
-                            value="1"
-                            disabled
-                        />
-                    </CardContent>
-                </Card>
-                </>
-                }
+                        <Typography variant="h4" gutterBottom>Pay for Parking Ticket</Typography>
+                        <form onSubmit={handlePayTicket}>
+                            <TextField
+                                label="Amount"
+                                variant="outlined"
+                                value={costInput}
+                                onChange={(e) => setCostInput(e.target.value)}
+                                fullWidth
+                                margin="normal"
+                            />
+                            <Button type="submit" variant="contained" color="primary">Pay</Button>
+                        </form>
+                    </>
+                )}
             </Container>
+            {paySuccess && parkingTicket && (
+                <Container>
+                    <Alert severity="success" sx={{ mt: 2 }}>
+                        Payment successful!
+                    </Alert>
 
-            {pay && <Container>
-                <h1>Pay for Parking Ticket</h1>
-                <TextField
-                    label="Ticket Number"
-                    variant="outlined"
-                    value={parkingTicket.ticketNumber}
-                    onChange={(e) => setParkingTicket(e.target.value)}
-                />
-                <TextField
-                    label="Amount"
-                    variant="outlined"
-                    value={costInput}
-                    onChange={(e) => setCostInput(e.target.value)}
-                />
-                <Button variant="contained" color="primary" onClick={handlePayTicket}>Pay Ticket</Button>
-                {paySuccess && <Alert severity="success">
-                    Payment successful!
-                </Alert>}
-            </Container>}
-            
+                    <Paper elevation={3} sx={{ mt: 3, p: 3 }}>
+                        <Typography variant="h6" gutterBottom>Parking Ticket Details</Typography>
+                        <Box display="flex" flexDirection="column" alignItems="center">
+                            <Box sx={{ mb: 2 }}>
+                                <Typography variant="body1">Ticket Number:</Typography>
+                                <Typography variant="h6">{parkingTicket.ticketNumber}</Typography>
+                            </Box>
+                            <Box sx={{ mb: 2 }}>
+                                <Typography variant="body1">Entry Time:</Typography>
+                                <Typography variant="h6">{parkingTicket.entryTime}</Typography>
+                            </Box>
+                            <Box sx={{ mb: 2 }}>
+                                <Typography variant="body1">Exit Time:</Typography>
+                                <Typography variant="h6">{parkingTicket.exitTime}</Typography>
+                            </Box>
+                            <Box sx={{ mb: 2 }}>
+                                <Typography variant="body1">Cost:</Typography>
+                                <Typography variant="h6">${parkingTicket.cost}</Typography>
+                            </Box>
+                            <Box sx={{ mb: 2 }}>
+                                <Typography variant="body1">Balance:</Typography>
+                                <Typography variant="h6">${parkingTicket.balance}</Typography>
+                            </Box>
+                        </Box>
+                    </Paper>
+                </Container>
+            )}
         </>
     );
 }

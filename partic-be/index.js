@@ -4,17 +4,11 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { format, parseISO, differenceInHours } = require('date-fns');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3001;
-
-// Configure CORS options using FRONTEND_URL from .env
-// const corsOptions = {
-//   origin: process.env.FRONTEND_URL,
-//   methods: 'GET,POST,PUT,DELETE',
-//   allowedHeaders: 'Content-Type,Authorization',
-// };
 
 // Enable CORS with configured options
 app.use(cors());
@@ -30,6 +24,32 @@ const pool = mysql.createPool({
   connectionLimit: 10, // Adjust this based on your requirements
   queueLimit: 0,
 });
+
+// Utility function to get current time
+function getCurrentTime() {
+  return new Date();
+}
+
+// Utility function to format time in yyyy-MM-dd HH:mm format
+function formatTime(date) {
+  return format(date, 'yyyy-MM-dd HH:mm');
+}
+
+// Utility function to calculate the parking fee
+function calculateParkingFee(entryTime, exitTime, hourlyRate) {
+  const hours = differenceInHours(exitTime, entryTime);
+  if (hours <= 0) {
+    return hourlyRate * 1;
+  }
+  const cost = hours * hourlyRate;
+  console.log("Hours: " + hours);
+  console.log("Cost: " + cost);
+  if (cost <= 0) {
+    return hourlyRate * 1;
+  } else {
+    return cost;
+  }
+}
 
 // API Endpoint to Register User
 app.post('/api/register', (req, res) => {
@@ -83,12 +103,11 @@ app.post('/api/register', (req, res) => {
   });
 });
 
-
 // API Endpoint to Authenticate and Get JWT
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
 
-  console.log("Login recorded" );
+  console.log("Login recorded");
 
   // Retrieve user from the database based on username
   const getUserQuery = 'SELECT * FROM users WHERE username = ?';
@@ -141,12 +160,12 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-//Basic GET request to validate the server is online
+// Basic GET request to validate the server is online
 app.get('/api/online', (req, res) => {
   res.status(200).json({ message: 'Backend Server is online' });
 });
 
-//Basic Get to check if the database is online
+// Basic Get to check if the database is online
 app.get('/api/db-online', (req, res) => {
   pool.getConnection((err, connection) => {
     if (err) {
@@ -159,45 +178,30 @@ app.get('/api/db-online', (req, res) => {
   });
 });
 
-
-/**
- * Application Middleware
- *
- * 1. Get a parking ticket
- * 2. Exit a parking ticket
- * 3. Pay for a parking ticket
- * 4. Get all parking tickets (Protected with authentication)
- * 5. Delete a parking ticket (Protected with authentication)
- */
-
 // API Endpoint to Get a Parking Ticket and send it to the user and db
 app.get('/api/get-parkingTicket', (req, res) => {
   const ticketNumber = Math.floor(Math.random() * 1000000);
-  const entryTime = new Date().toLocaleString();
+  const entryTime = getCurrentTime();
 
   console.log("Ticket Number: " + ticketNumber);
-  console.log("Entry Time: " + entryTime);
+  console.log("Entry Time: " + formatTime(entryTime));
 
-  // Insert the ticket into the database
   const sql = 'INSERT INTO parkingtickets (ticketNumber, entryTime) VALUES (?, ?)';
   pool.query(sql, [ticketNumber, entryTime], (err, result) => {
     if (err) {
       console.error('Error inserting parking ticket:', err);
       res.status(500).json({ error: 'Error inserting parking ticket' });
     } else {
-      console.log('Parking ticket inserted:', result);
-      res.status(200).json({ ticketNumber, entryTime });
+      res.status(200).json({ ticketNumber, entryTime: formatTime(entryTime) });
     }
   });
 });
 
+// API Endpoint to Search for a Parking Ticket and Calculate Hypothetical Exit Time and Cost
+app.get('/api/search-parkingTicket/:ticketNumber', (req, res) => {
+  const ticketNumber = req.params.ticketNumber;
+  const exitTime = getCurrentTime();
 
-// API Endpoint to Exit a Parking Ticket and calculate the cost
-app.post('/api/exit-parkingTicket', (req, res) => {
-  const { ticketNumber } = req.body;
-  const exitTime = new Date();
-
-  // Retrieve the ticket from the database
   const sql = 'SELECT * FROM parkingtickets WHERE ticketNumber = ?';
   pool.query(sql, [ticketNumber], (err, results) => {
     if (err) {
@@ -210,45 +214,28 @@ app.post('/api/exit-parkingTicket', (req, res) => {
     }
 
     const ticket = results[0];
+    const entryTime = ticket.entryTime;
 
-    if (ticket.isExited) {
-      // If the ticket has already exited, return the existing data
-      return res.status(200).json({
-        ticketNumber: ticket.ticketNumber,
-        entryTime: ticket.entryTime,
-        exitTime: ticket.exitTime,
-        cost: ticket.cost,
-        paymentStatus: ticket.paymentStatus,
-        isExited: ticket.isExited,
-      });
-    }
+    const cost = calculateParkingFee(entryTime, exitTime, parseFloat(process.env.REACT_APP_HOURLY_RATE));
 
-    const entryTime = new Date(ticket.entryTime);
-
-    // Calculate the cost based on entry time and exit time
-    const diff = exitTime - entryTime;
-    const hours = Math.ceil(diff / (1000 * 60 * 60)); // Ensure at least 1 hour is charged
-    const cost = hours * parseFloat(process.env.REACT_APP_HOURLY_RATE);
-
-    // Update the ticket with the exit time, cost, and set isExited to true
-    const updateSql = 'UPDATE parkingtickets SET exitTime = ?, cost = ?, paymentStatus = ?, isExited = ? WHERE ticketNumber = ?';
-    pool.query(updateSql, [exitTime.toISOString(), cost, false, true, ticketNumber], (updateErr) => {
+    const updateSql = 'UPDATE parkingtickets SET exitTime = ?, cost = ?, balance = ? WHERE ticketNumber = ?';
+    pool.query(updateSql, [exitTime.toISOString(), cost, cost, ticketNumber], (updateErr, updateResult) => {
       if (updateErr) {
         console.error('Error updating parking ticket:', updateErr);
         return res.status(500).json({ error: 'Error updating parking ticket' });
       }
 
       res.status(200).json({
-        ticketNumber,
-        entryTime: ticket.entryTime,
-        exitTime: exitTime.toISOString(),
-        cost,
-        paymentStatus: false,
-        isExited: true,
+        ticketNumber: ticket.ticketNumber,
+        entryTime: formatTime(entryTime),
+        exitTime: formatTime(exitTime),
+        cost: cost,
+        balance: cost,
       });
     });
   });
 });
+
 
 // API Endpoint to Pay for a Parking Ticket
 app.post('/api/pay-parkingTicket', (req, res) => {
@@ -283,7 +270,23 @@ app.post('/api/pay-parkingTicket', (req, res) => {
         return res.status(500).json({ error: 'Error updating parking ticket' });
       }
 
-      res.status(200).json({ ticketNumber, balance: newBalance });
+      // Retrieve the updated ticket information
+      pool.query(sql, [ticketNumber], (err, updatedResults) => {
+        if (err) {
+          console.error('Error retrieving updated parking ticket:', err);
+          return res.status(500).json({ error: 'Error retrieving updated parking ticket' });
+        }
+
+        const updatedTicket = updatedResults[0];
+        res.status(200).json({
+          ticketNumber: updatedTicket.ticketNumber,
+          entryTime: formatTime(parseISO(updatedTicket.entryTime)),
+          exitTime: formatTime(parseISO(updatedTicket.exitTime)),
+          cost: updatedTicket.cost,
+          balance: updatedTicket.balance,
+          paymentStatus: updatedTicket.paymentStatus,
+        });
+      });
     });
   });
 });
@@ -317,7 +320,7 @@ app.get('/api/get-tickets', authenticateToken, (req, res) => {
 
 // API Endpoint to Delete Parking Ticket (Protected with authentication)
 app.delete('/api/delete-ticket/:ticketNumber', authenticateToken, (req, res) => {
-  const ticketId = req.params.id;
+  const ticketNumber = req.params.ticketNumber;
   const sql = 'DELETE FROM parkingtickets WHERE ticketNumber = ?';
 
   // Get a connection from the pool
@@ -329,7 +332,7 @@ app.delete('/api/delete-ticket/:ticketNumber', authenticateToken, (req, res) => 
     }
 
     // Execute the query
-    connection.query(sql, [ticketId], (err, result) => {
+    connection.query(sql, [ticketNumber], (err, result) => {
       connection.release(); // Release the connection back to the pool
 
       if (err) {
@@ -342,7 +345,6 @@ app.delete('/api/delete-ticket/:ticketNumber', authenticateToken, (req, res) => 
     });
   });
 });
-
 
 // Start the server
 app.listen(port, () => {

@@ -12,6 +12,7 @@ services:
       - REACT_APP_FRONTEND_URL=http://partic.zfserver.local
       - PORT=2023
       - REACT_APP_HOURLY_RATE=5.00
+      - TIMEZONE=America/Phoenix
 
   partic-backend:
     container_name: partic-backend
